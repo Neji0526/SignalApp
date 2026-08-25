@@ -13,10 +13,20 @@ import { cn, timeAgo } from "@/lib/utils";
  * strategy) collects the queued orders and places them through the broker it is
  * already connected to. We never hold broker credentials. */
 
-const MODES: { value: CopyMode; label: string; hint: string }[] = [
+/* Two deployments, two different things happening to the subscriber's order, and
+ * the difference is not cosmetic: on the pull path we hand the order to THEIR
+ * terminal and never touch a broker, while on the prop path we place it directly
+ * on the account we issued them. Describing one as the other would misstate who
+ * is executing, so the copy follows the deployment. */
+const MODES: { value: CopyMode; label: string; hint: string; hintDirect?: string }[] = [
   { value: "off", label: "Off", hint: "Signals only — nothing is traded for you." },
   { value: "confirm", label: "Confirm each", hint: "An order is prepared; you approve it before it goes out." },
-  { value: "auto", label: "Automatic", hint: "Orders are queued for your terminal without asking." },
+  {
+    value: "auto",
+    label: "Automatic",
+    hint: "Orders are queued for your terminal without asking.",
+    hintDirect: "Trades are placed on your account without asking.",
+  },
 ];
 
 const STATUS_TONE: Record<string, "long" | "short" | "warning" | "neutral" | "info"> = {
@@ -91,6 +101,9 @@ export default function AutomationPage() {
   if (!settings) return <div className="py-16 text-center text-sm text-muted">{error ?? "Could not load settings."}</div>;
 
   const on = settings.mode !== "off";
+  // Readiness is only reported on the prop-account deployment; null means the
+  // pull path, where we queue for the subscriber's own terminal instead.
+  const direct = settings.tradeReady != null;
 
   return (
     <div>
@@ -107,11 +120,35 @@ export default function AutomationPage() {
         <div className="mb-4 rounded-lg border border-short/40 bg-short/10 px-3 py-2 text-sm text-short">{error}</div>
       )}
 
+      {/* Switching copying on does NOT mean we can trade the account: it has to
+        * have passed a live test order first, because a prop account can look
+        * perfectly healthy and still ignore orders without rejecting them. Saying
+        * "Active" while every signal is skipped is the one thing this page must
+        * never do. Louder once copying is actually on — that is when the gap
+        * between what the badge says and what happens becomes real. */}
+      {settings.tradeReady === false && (
+        <div
+          className={cn(
+            "mb-4 rounded-lg border px-3 py-2.5 text-sm",
+            on ? "border-warning/40 bg-warning/10 text-warning" : "border-border bg-surface-2 text-muted",
+          )}
+        >
+          <div className="font-medium">
+            {on ? "Copying is on, but your account can't be traded yet" : "Your account isn't ready to be traded yet"}
+          </div>
+          <p className="mt-0.5 text-xs opacity-90">
+            {settings.tradeBlockedReason}
+            {on && " Until it clears, signals are skipped rather than traded."}
+          </p>
+        </div>
+      )}
+
       <Card className="mb-4 p-5">
         <div className="text-sm font-medium">Auto-copy signals</div>
         <p className="mt-1 max-w-2xl text-sm text-muted">
-          Copy signals into your own trading platform. Orders are queued for your terminal, which places them through
-          the broker you&apos;ve already connected — we never see or hold your broker login.
+          {direct
+            ? "Copy signals straight onto your funded account. Trades are placed for you automatically — there is nothing to install and no broker login to connect."
+            : "Copy signals into your own trading platform. Orders are queued for your terminal, which places them through the broker you've already connected — we never see or hold your broker login."}
         </p>
 
         <div className="mt-4 grid gap-2 sm:grid-cols-3">
@@ -127,7 +164,7 @@ export default function AutomationPage() {
               )}
             >
               <div className="text-sm font-medium">{m.label}</div>
-              <div className="mt-0.5 text-[11px] leading-snug text-muted">{m.hint}</div>
+              <div className="mt-0.5 text-[11px] leading-snug text-muted">{(direct && m.hintDirect) || m.hint}</div>
             </button>
           ))}
         </div>

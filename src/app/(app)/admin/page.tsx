@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, MARKETS, type AccessConfig, type AdminUser, type Direction, type RiskConfig } from "@/lib/api";
+import { api, MARKETS, type AccessConfig, type AdminUser, type Direction, type ReadinessView, type RiskConfig } from "@/lib/api";
 import { getToken } from "@/store/auth-store";
 import { useAuthStore } from "@/store/auth-store";
 import { Card, Button } from "@/components/ui";
@@ -57,6 +57,8 @@ export default function AdminPage() {
       {error && <Card className="mb-4 border-short/40 p-3 text-sm text-short">{error}</Card>}
 
       <RiskConfigCard />
+
+      <ReadinessCard />
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -118,6 +120,156 @@ function Mini({ label, value }: { label: string; value: number }) {
     <Card className="p-3">
       <div className="text-xs text-muted">{label}</div>
       <div className="mt-0.5 text-xl font-semibold nums">{value}</div>
+    </Card>
+  );
+}
+
+/* dxFeed trade readiness.
+ *
+ * A subscriber's account can be fully provisioned, report itself enabled, and
+ * still silently ignore orders — no rejection, nothing to alert on. So the copy
+ * engine refuses to route to an account until a real probe order has been acked,
+ * which means an unverified subscriber is having their signals SKIPPED. That is
+ * the thing this card exists to surface; it leads with the blocked ones because
+ * they are the only rows anyone needs to act on.
+ *
+ * The backend re-probes every 5 minutes on its own. Re-check is here for when
+ * you have just fixed the cause and don't want to wait for the sweep.
+ */
+function ReadinessCard() {
+  const [view, setView] = useState<ReadinessView | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+    try {
+      setView(await api.adminReadiness(token));
+      setErr(null);
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const run = async (userId: string, action: () => Promise<string>) => {
+    setBusy(userId); setNote(null);
+    try {
+      setNote(await action());
+      await load();
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const provision = (userId: string) => run(userId, async () => {
+    const token = getToken();
+    if (!token) return "Not signed in.";
+    const link = await api.adminProvisionDxFeed(token, userId);
+    return link.dxAccountId
+      ? "Account created. It still has to pass a test order before any signals are copied to it."
+      : "Partially provisioned — run it again to finish.";
+  });
+
+  const recheck = (userId: string) => run(userId, async () => {
+    const token = getToken();
+    if (!token) return "Not signed in.";
+    const r = await api.adminRecheckReadiness(token, userId);
+    // Three outcomes, and conflating them is the whole trap: "couldn't tell" is
+    // not a failure and says nothing about this subscriber.
+    return r.ready ? "Now tradeable."
+      : r.inconclusive ? `Couldn't tell — ${r.reason}. Nothing recorded against them; try again once the market is open.`
+        : `Still blocked — ${r.reason}`;
+  });
+
+  if (err) return <Card className="mb-4 border-short/40 p-3 text-sm text-short">{err}</Card>;
+  // On the ATAS pull deployment nobody has a dxFeed account and nobody needs
+  // one, so the entire card would be a wall of false alarms.
+  if (!view || view.adapter !== "dxfeed" || view.rows.length === 0) return null;
+
+  const rows = view.rows;
+  const blocked = rows.filter((r) => !r.tradeVerifiedAt);
+
+  return (
+    <Card className="mb-4 p-4">
+      <div className="mb-1 flex items-baseline justify-between">
+        <div className="text-sm font-medium">Copy trading readiness</div>
+        <div className="text-[11px] text-muted-2">
+          {blocked.length === 0
+            ? `All ${rows.length} subscriber${rows.length === 1 ? "" : "s"} tradeable`
+            : `${blocked.length} of ${rows.length} not tradeable`}
+        </div>
+      </div>
+      <p className="mb-3 text-xs text-muted">
+        A subscriber is only traded once they have a dxFeed account <em>and</em> a real test order
+        has been accepted on it — a provisioned account can look perfectly healthy and still ignore
+        orders silently. Until both hold, their signals are skipped. Re-checks run automatically
+        every 5 minutes.
+      </p>
+
+      {note && <div className="mb-3 rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted">{note}</div>}
+
+      {blocked.length === 0 ? (
+        <div className="flex items-center gap-2 text-sm text-long">
+          <span className="h-1.5 w-1.5 rounded-full bg-long" />
+          Every subscriber has an account that is accepting orders.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted">
+                <Th>Subscriber</Th>
+                <Th>Why not tradeable</Th>
+                <Th className="text-right">Actions</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {blocked.map((r) => (
+                <tr key={r.userId} className="border-b border-border/60">
+                  <Td>
+                    <div className="font-medium text-foreground">{r.name || "—"}</div>
+                    <div className="text-xs text-muted">{r.email}</div>
+                  </Td>
+                  <Td>
+                    <div className="text-xs text-short">
+                      {!r.dxAccountId
+                        ? "No dxFeed account yet."
+                        : r.tradeProbeError || "Not tested yet — the next sweep will try."}
+                    </div>
+                  </Td>
+                  <Td className="text-right">
+                    {r.dxAccountId ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={busy === r.userId}
+                        onClick={() => void recheck(r.userId)}
+                      >
+                        {busy === r.userId ? "Checking…" : "Re-check"}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={busy === r.userId}
+                        onClick={() => void provision(r.userId)}
+                      >
+                        {busy === r.userId ? "Creating…" : "Provision"}
+                      </Button>
+                    )}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Card>
   );
 }

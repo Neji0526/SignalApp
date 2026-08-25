@@ -120,7 +120,47 @@ export const api = {
   adminGetRiskConfig: (token: string) => req<RiskConfig>("/api/admin/risk-config", {}, token),
   adminSetRiskConfig: (token: string, config: RiskConfig) =>
     req<RiskConfig>("/api/admin/risk-config", { method: "PUT", body: JSON.stringify(config) }, token),
+
+  // --- dxFeed trade readiness ---
+  adminReadiness: (token: string) => req<ReadinessView>("/api/admin/dxfeed/readiness", {}, token),
+  // POST, not GET: this places a real probe order on the subscriber's account.
+  adminRecheckReadiness: (token: string, userId: string) =>
+    req<ReadinessResult>(`/api/admin/dxfeed/readiness/${encodeURIComponent(userId)}`, { method: "POST" }, token),
+  // Creates a REAL trading account at the prop firm. Admin-only, never automatic
+  // on registration. Idempotent: safe to retry on a partially provisioned user.
+  adminProvisionDxFeed: (token: string, userId: string) =>
+    req<{ dxUserId: string; dxAccountId: string | null }>(
+      `/api/admin/dxfeed/provision/${encodeURIComponent(userId)}`, { method: "POST" }, token),
 };
+
+/* A dxFeed account can be fully provisioned, report itself enabled, and still
+ * silently ignore orders — so the copy engine only routes to accounts proven by
+ * a real probe order. `tradeVerifiedAt === null` means this subscriber's signals
+ * are being SKIPPED, which is why the admin view leads with them. */
+export interface ReadinessView {
+  /** Which execution path the backend is actually running. On "atas" the whole
+   *  dxFeed readiness view is meaningless, so the UI hides it. */
+  adapter: "dxfeed" | "atas";
+  rows: ReadinessRow[];
+}
+
+export interface ReadinessRow {
+  userId: string;
+  email: string;
+  name: string | null;
+  dxAccountId: string | null;
+  accountStatus: number | null;
+  tradeVerifiedAt: string | null;
+  tradeProbeError: string | null;
+}
+
+export interface ReadinessResult {
+  ready: boolean;
+  reason: string | null;
+  /** Nothing was learned — market closed or our session was down. Not the
+   *  subscriber's fault, and deliberately not recorded against them. */
+  inconclusive?: boolean;
+}
 
 /** Global DEFAULT base dollar risk per trade. A signal's risk = base × its
  *  conviction (1-4); the copier sizes in micro contracts to hit it. Each account
@@ -140,6 +180,12 @@ export interface CopySettings {
   baseRisk: number | null;
   maxConcurrent: number;
   maxPerDay: number;
+  /* Whether we would actually place trades for this account. Read-only, GET
+   * only, and null on the ATAS pull deployment where the question is
+   * meaningless. Copying can be switched on while this is false — the settings
+   * save fine, the signals just get skipped — so the page has to say so. */
+  tradeReady?: boolean | null;
+  tradeBlockedReason?: string | null;
 }
 
 export type CopyOrderStatus =
