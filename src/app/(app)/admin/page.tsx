@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { api, MARKETS, type AccessConfig, type AdminUser, type Direction, type ReadinessView, type RiskConfig } from "@/lib/api";
 import { getToken } from "@/store/auth-store";
 import { useAuthStore } from "@/store/auth-store";
-import { Card, Button } from "@/components/ui";
+import { Card, Button, Field } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 const CONVICTION_LABEL: Record<number, string> = { 1: "Any", 2: "2+ (medium)", 3: "3+ (high)", 4: "4 only (max)" };
@@ -376,6 +376,10 @@ function AccessEditor({ user, onClose, onSaved }: { user: AdminUser; onClose: ()
   const [status, setStatus] = useState<"ACTIVE" | "SUSPENDED">(user.status);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [resetErr, setResetErr] = useState<string | null>(null);
+  const [resetOk, setResetOk] = useState(false);
 
   const patch = (p: Partial<AccessConfig>) => setAccess((a) => ({ ...a, ...p }));
   const toggleMarket = (m: string) =>
@@ -391,6 +395,21 @@ function AccessEditor({ user, onClose, onSaved }: { user: AdminUser; onClose: ()
     } catch (e) {
       setErr((e as Error).message);
       setSaving(false);
+    }
+  };
+
+  const resetPassword = async () => {
+    const token = getToken();
+    if (!token || !newPassword) return;
+    setResetting(true); setResetErr(null); setResetOk(false);
+    try {
+      await api.adminUpdateUser(token, user.id, { password: newPassword });
+      setResetOk(true);
+      setNewPassword("");
+    } catch (e) {
+      setResetErr((e as Error).message);
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -532,6 +551,20 @@ function AccessEditor({ user, onClose, onSaved }: { user: AdminUser; onClose: ()
               danger
               onChange={(v) => setStatus(v ? "SUSPENDED" : "ACTIVE")}
             />
+          </Section>
+
+          {/* Reset password */}
+          <Section title="Reset password" hint="Sets their password directly — no email is sent.">
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Field label="New password" type="password" value={newPassword} onChange={(v) => { setNewPassword(v); setResetOk(false); }} placeholder="At least 6 characters" />
+              </div>
+              <Button variant="secondary" onClick={resetPassword} loading={resetting} disabled={newPassword.length < 6}>
+                Set password
+              </Button>
+            </div>
+            {resetErr && <div className="mt-1 text-xs text-short">{resetErr}</div>}
+            {resetOk && <div className="mt-1 text-xs text-long">Password updated.</div>}
           </Section>
 
           {err && <div className="text-sm text-short">{err}</div>}

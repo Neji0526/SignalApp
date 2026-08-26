@@ -115,7 +115,7 @@ export const api = {
 
   // --- admin ---
   adminListUsers: (token: string) => req<AdminUser[]>("/api/admin/users", {}, token),
-  adminUpdateUser: (token: string, id: string, body: { access?: AccessConfig; status?: "ACTIVE" | "SUSPENDED" }) =>
+  adminUpdateUser: (token: string, id: string, body: { access?: AccessConfig; status?: "ACTIVE" | "SUSPENDED"; password?: string }) =>
     req<{ ok: true }>(`/api/admin/users/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(body) }, token),
   adminGetRiskConfig: (token: string) => req<RiskConfig>("/api/admin/risk-config", {}, token),
   adminSetRiskConfig: (token: string, config: RiskConfig) =>
