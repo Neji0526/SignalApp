@@ -13,6 +13,7 @@ interface SignalsState {
   disconnect: () => void;
 }
 
+
 let ws: WebSocket | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;

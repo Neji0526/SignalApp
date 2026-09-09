@@ -20,6 +20,7 @@ export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
+
 export const useAuthStore = create<AuthState>((set) => ({
   token: null,
   user: null,
