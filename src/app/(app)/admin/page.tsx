@@ -187,7 +187,7 @@ function ReadinessCard() {
     // Three outcomes, and conflating them is the whole trap: "couldn't tell" is
     // not a failure and says nothing about this subscriber.
     return r.ready ? "Now tradeable."
-      : r.inconclusive ? `Couldn't tell — ${r.reason}. Nothing recorded against them; try again once the market is open.`
+      : r.inconclusive ? `Couldn't tell — ${r.reason}. Nothing recorded against them; try again later.`
         : `Still blocked — ${r.reason}`;
   });
 
