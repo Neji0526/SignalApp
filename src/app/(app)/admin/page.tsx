@@ -171,9 +171,13 @@ function ReadinessCard() {
     const token = getToken();
     if (!token) return "Not signed in.";
     const link = await api.adminProvisionDxFeed(token, userId);
-    return link.dxAccountId
-      ? "Account created. It still has to pass a test order before any signals are copied to it."
-      : "Partially provisioned — run it again to finish.";
+    if (!link.dxAccountId) {
+      return "Partially provisioned — run Provision again to finish.";
+    }
+    if (link.linkedExisting) {
+      return "Linked existing dxFeed user/subscription into Signal. Still needs a test order before signals are copied.";
+    }
+    return "Account created. It still has to pass a test order before any signals are copied to it.";
   });
 
   const recheck = (userId: string) => run(userId, async () => {
@@ -209,7 +213,9 @@ function ReadinessCard() {
         A subscriber is only traded once they have a dxFeed account <em>and</em> a real test order
         has been accepted on it — a provisioned account can look perfectly healthy and still ignore
         orders silently. Until both hold, their signals are skipped. Re-checks run automatically
-        every 5 minutes.
+        every 5 minutes. If they already signed on Vault / Volumetrica,{" "}
+        <strong className="font-medium text-foreground">Provision</strong> links that existing
+        dxFeed user instead of creating a new subscription.
       </p>
 
       {note && <div className="mb-3 rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted">{note}</div>}
@@ -260,7 +266,7 @@ function ReadinessCard() {
                         disabled={busy === r.userId}
                         onClick={() => void provision(r.userId)}
                       >
-                        {busy === r.userId ? "Creating…" : "Provision"}
+                        {busy === r.userId ? "Linking…" : "Provision"}
                       </Button>
                     )}
                   </Td>

@@ -126,10 +126,11 @@ export const api = {
   // POST, not GET: this places a real probe order on the subscriber's account.
   adminRecheckReadiness: (token: string, userId: string) =>
     req<ReadinessResult>(`/api/admin/dxfeed/readiness/${encodeURIComponent(userId)}`, { method: "POST" }, token),
-  // Creates a REAL trading account at the prop firm. Admin-only, never automatic
-  // on registration. Idempotent: safe to retry on a partially provisioned user.
+  // Creates a REAL trading account at the prop firm, or links an existing
+  // Volumetrica user/subscription (e.g. already signed via Vault onboarding).
+  // Admin-only, never automatic on registration. Idempotent: safe to retry.
   adminProvisionDxFeed: (token: string, userId: string) =>
-    req<{ dxUserId: string; dxAccountId: string | null }>(
+    req<{ dxUserId: string; dxAccountId: string | null; linkedExisting?: boolean }>(
       `/api/admin/dxfeed/provision/${encodeURIComponent(userId)}`, { method: "POST" }, token),
 };
 
