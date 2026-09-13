@@ -103,7 +103,8 @@ export default function AutomationPage() {
   const on = settings.mode !== "off";
   // Readiness is only reported on the prop-account deployment; null means the
   // pull path, where we queue for the subscriber's own terminal instead.
-  const direct = settings.tradeReady != null;
+  const direct = settings.executionAdapter === "dxfeed" || settings.tradeReady != null;
+  const showTerminalSetup = settings.showTerminalSetup === true;
 
   return (
     <div>
@@ -170,7 +171,20 @@ export default function AutomationPage() {
         </div>
       </Card>
 
-      <ConnectGuide serverUrl={API_BASE} email={email} />
+      {/* Server URL / ATAS credentials: admin + ATAS pull only. Never show to
+        * normal subscribers (especially on the dxFeed prop path). */}
+      {showTerminalSetup ? (
+        <ConnectGuide serverUrl={API_BASE} email={email} />
+      ) : !direct ? (
+        <Card className="mb-4 p-5">
+          <div className="text-sm font-medium">Connect your terminal</div>
+          <p className="mt-1 max-w-2xl text-sm text-muted">
+            Terminal connection details are set up by your administrator. You do not need a
+            server URL or strategy credentials on this page — turn Automatic or Confirm on above
+            once support has finished your setup.
+          </p>
+        </Card>
+      ) : null}
 
       <Card className={cn("mb-4 p-5 transition", !on && "opacity-50")}>
         <div className="text-sm font-medium">Rules</div>

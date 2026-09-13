@@ -187,6 +187,13 @@ export interface CopySettings {
    * save fine, the signals just get skipped — so the page has to say so. */
   tradeReady?: boolean | null;
   tradeBlockedReason?: string | null;
+  /** Which execution path the backend is running. */
+  executionAdapter?: "dxfeed" | "atas";
+  /**
+   * True only for ADMINS on the ATAS pull deployment. When false, the UI must
+   * not show Server URL / login paste fields or terminal install secrets.
+   */
+  showTerminalSetup?: boolean;
 }
 
 export type CopyOrderStatus =
