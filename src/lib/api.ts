@@ -107,6 +107,9 @@ export const api = {
   chartHistory: (token: string, symbol: string, resolution: number, count = 300) =>
     req<Candle[]>(`/api/chart/history?symbol=${encodeURIComponent(symbol)}&resolution=${resolution}&count=${count}`, {}, token),
 
+  /** Server feature switches (no auth). autoCopy=false → auto-copy UI is shown disabled. */
+  features: () => req<{ autoCopy: boolean }>("/api/features"),
+
   // --- auto-copy ---
   copySettings: (token: string) => req<CopySettings>("/api/copy/settings", {}, token),
   updateCopySettings: (token: string, body: CopySettings) =>
@@ -142,6 +145,8 @@ export interface ReadinessView {
   /** Which execution path the backend is actually running. On "atas" the whole
    *  dxFeed readiness view is meaningless, so the UI hides it. */
   adapter: "dxfeed" | "atas";
+  /** False while auto-copy is switched off server-side (Provision / Re-check refused). */
+  autoCopyEnabled?: boolean;
   rows: ReadinessRow[];
 }
 
@@ -194,6 +199,8 @@ export interface CopySettings {
    * not show Server URL / login paste fields or terminal install secrets.
    */
   showTerminalSetup?: boolean;
+  /** False while auto-copy is switched off server-side — the page is shown disabled. */
+  autoCopyEnabled?: boolean;
 }
 
 export type CopyOrderStatus =

@@ -7,6 +7,7 @@ import { getToken } from "@/store/auth-store";
 import { useAuthStore } from "@/store/auth-store";
 import { Card, Button, Field } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { useAutoCopyEnabled } from "@/lib/features";
 
 const CONVICTION_LABEL: Record<number, string> = { 1: "Any", 2: "2+ (medium)", 3: "3+ (high)", 4: "4 only (max)" };
 
@@ -198,13 +199,14 @@ function ReadinessCard() {
 
   const rows = view.rows;
   const blocked = rows.filter((r) => !r.tradeVerifiedAt);
+  const disabled = view.autoCopyEnabled === false;
 
   return (
     <Card className="mb-4 p-4">
       <div className="mb-1 flex items-baseline justify-between">
         <div className="text-sm font-medium">Copy trading readiness</div>
         <div className="text-[11px] text-muted-2">
-          {blocked.length === 0
+          {disabled ? "Disabled" : blocked.length === 0
             ? `All ${rows.length} subscriber${rows.length === 1 ? "" : "s"} tradeable`
             : `${blocked.length} of ${rows.length} not tradeable`}
         </div>
@@ -217,6 +219,13 @@ function ReadinessCard() {
         <strong className="font-medium text-foreground">Provision</strong> links that existing
         dxFeed user instead of creating a new subscription.
       </p>
+
+      {disabled && (
+        <div className="mb-3 rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
+          Auto-copy is disabled on the server (<code>AUTO_COPY_ENABLED</code>), so Provision and Re-check are off:
+          no dxFeed accounts are created and no test orders are placed.
+        </div>
+      )}
 
       {note && <div className="mb-3 rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted">{note}</div>}
 
@@ -254,7 +263,7 @@ function ReadinessCard() {
                       <Button
                         size="sm"
                         variant="secondary"
-                        disabled={busy === r.userId}
+                        disabled={disabled || busy === r.userId}
                         onClick={() => void recheck(r.userId)}
                       >
                         {busy === r.userId ? "Checking…" : "Re-check"}
@@ -263,7 +272,7 @@ function ReadinessCard() {
                       <Button
                         size="sm"
                         variant="secondary"
-                        disabled={busy === r.userId}
+                        disabled={disabled || busy === r.userId}
                         onClick={() => void provision(r.userId)}
                       >
                         {busy === r.userId ? "Linking…" : "Provision"}
@@ -285,6 +294,7 @@ function ReadinessCard() {
 // so a higher-conviction signal carries proportionally more size. Each subscriber
 // can override this base on their own automation page; this is the fallback.
 function RiskConfigCard() {
+  const disabled = useAutoCopyEnabled() === false;
   const [cfg, setCfg] = useState<RiskConfig | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -316,10 +326,12 @@ function RiskConfigCard() {
 
   const base = cfg?.baseRisk ?? 100;
   return (
-    <Card className="mb-4 p-4">
+    <Card className={cn("mb-4 p-4", disabled && "opacity-60")}>
       <div className="mb-1 flex items-baseline justify-between">
         <div className="text-sm font-medium">Default base risk per trade</div>
-        <div className="text-[11px] text-muted-2">Copied trades are sized in micros to risk this much</div>
+        <div className="text-[11px] text-muted-2">
+          {disabled ? "Disabled — auto-copy is off" : "Copied trades are sized in micros to risk this much"}
+        </div>
       </div>
       <p className="mb-3 text-xs text-muted">
         A trade risks the base × the signal&apos;s conviction (1–4); the copier switches to micro
@@ -338,8 +350,9 @@ function RiskConfigCard() {
                 type="number"
                 min={1}
                 value={cfg.baseRisk}
+                disabled={disabled}
                 onChange={(e) => setBase(Number(e.target.value))}
-                className="w-24 bg-transparent px-1 text-right text-sm font-medium outline-none nums"
+                className="w-24 bg-transparent px-1 text-right text-sm font-medium outline-none nums disabled:cursor-not-allowed"
               />
             </div>
           </label>
@@ -347,7 +360,7 @@ function RiskConfigCard() {
             L1 <span className="text-muted">${base}</span> · L2 <span className="text-muted">${base * 2}</span> ·
             L3 <span className="text-muted">${base * 3}</span> · L4 <span className="text-muted">${base * 4}</span>
           </div>
-          <Button onClick={save} loading={saving}>Save</Button>
+          <Button onClick={save} loading={saving} disabled={disabled}>Save</Button>
           {saved && <span className="text-xs text-long">Saved ✓</span>}
           {err && <span className="text-xs text-short">{err}</span>}
         </div>
@@ -378,6 +391,7 @@ function AccessSummary({ access }: { access: AccessConfig }) {
 // --- Access editor modal ---------------------------------------------------
 
 function AccessEditor({ user, onClose, onSaved }: { user: AdminUser; onClose: () => void; onSaved: () => void }) {
+  const autoCopyOff = useAutoCopyEnabled() === false;
   const [access, setAccess] = useState<AccessConfig>(user.access);
   const [status, setStatus] = useState<"ACTIVE" | "SUSPENDED">(user.status);
   const [saving, setSaving] = useState(false);
@@ -479,6 +493,10 @@ function AccessEditor({ user, onClose, onSaved }: { user: AdminUser; onClose: ()
             </select>
           </Section>
 
+          <fieldset disabled={autoCopyOff} className={cn("space-y-5", autoCopyOff && "opacity-50")}>
+          {autoCopyOff && (
+            <p className="text-[11px] text-muted-2">Copy settings are disabled while auto-copy is off.</p>
+          )}
           {/* Copy allocation */}
           <Section
             title="Copy allocation"
@@ -534,6 +552,7 @@ function AccessEditor({ user, onClose, onSaved }: { user: AdminUser; onClose: ()
               no matter how many signals they see or set on their own page.
             </p>
           </Section>
+          </fieldset>
 
           {/* Toggles */}
           <Section title="Live access">

@@ -100,7 +100,11 @@ export default function AutomationPage() {
   if (loading) return <div className="py-16 text-center text-sm text-muted">Loading…</div>;
   if (!settings) return <div className="py-16 text-center text-sm text-muted">{error ?? "Could not load settings."}</div>;
 
-  const on = settings.mode !== "off";
+  // Server switch (AUTO_COPY_ENABLED) off: everything below is shown disabled and
+  // the saved mode is displayed as Off without being overwritten.
+  const disabled = settings.autoCopyEnabled === false;
+  const mode: CopyMode = disabled ? "off" : settings.mode;
+  const on = mode !== "off";
   // Readiness is only reported on the prop-account deployment; null means the
   // pull path, where we queue for the subscriber's own terminal instead.
   const direct = settings.executionAdapter === "dxfeed" || settings.tradeReady != null;
@@ -110,9 +114,11 @@ export default function AutomationPage() {
     <div>
       <div className="mb-5 flex items-center gap-3">
         <h1 className="text-xl font-semibold">Automation</h1>
-        {on
-          ? <Badge tone={settings.mode === "auto" ? "long" : "warning"}>{settings.mode === "auto" ? "Active" : "Confirm mode"}</Badge>
-          : <Badge tone="neutral">Off</Badge>}
+        {disabled
+          ? <Badge tone="neutral">Disabled</Badge>
+          : on
+            ? <Badge tone={mode === "auto" ? "long" : "warning"}>{mode === "auto" ? "Active" : "Confirm mode"}</Badge>
+            : <Badge tone="neutral">Off</Badge>}
         {saving && <span className="text-xs text-muted">Saving…</span>}
         {saved && <span className="text-xs text-long">Saved</span>}
       </div>
@@ -127,7 +133,16 @@ export default function AutomationPage() {
         * "Active" while every signal is skipped is the one thing this page must
         * never do. Louder once copying is actually on — that is when the gap
         * between what the badge says and what happens becomes real. */}
-      {settings.tradeReady === false && (
+      {disabled && (
+        <div className="mb-4 rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-sm text-muted">
+          <div className="font-medium text-foreground">Auto-copy is currently disabled</div>
+          <p className="mt-0.5 text-xs">
+            Signals are view-only for now — nothing is traded for you and no trading account is created.
+          </p>
+        </div>
+      )}
+
+      {!disabled && settings.tradeReady === false && (
         <div
           className={cn(
             "mb-4 rounded-lg border px-3 py-2.5 text-sm",
@@ -156,10 +171,11 @@ export default function AutomationPage() {
           {MODES.map((m) => (
             <button
               key={m.value}
+              disabled={disabled}
               onClick={() => patch({ mode: m.value })}
               className={cn(
-                "rounded-lg border px-3 py-2.5 text-left transition",
-                settings.mode === m.value
+                "rounded-lg border px-3 py-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-50",
+                mode === m.value
                   ? "border-primary bg-primary/10"
                   : "border-border bg-surface-2 hover:bg-surface-3",
               )}
@@ -173,7 +189,7 @@ export default function AutomationPage() {
 
       {/* Server URL / ATAS credentials: admin + ATAS pull only. Never show to
         * normal subscribers (especially on the dxFeed prop path). */}
-      {showTerminalSetup ? (
+      {disabled ? null : showTerminalSetup ? (
         <ConnectGuide serverUrl={API_BASE} email={email} />
       ) : !direct ? (
         <Card className="mb-4 p-5">
@@ -264,7 +280,9 @@ export default function AutomationPage() {
               {orders.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-sm text-muted">
-                    {on ? "No copied orders yet." : "Automation is off — turn it on to start copying signals."}
+                    {disabled
+                      ? "Auto-copy is disabled."
+                      : on ? "No copied orders yet." : "Automation is off — turn it on to start copying signals."}
                   </td>
                 </tr>
               )}

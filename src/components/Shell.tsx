@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
+import { useAutoCopyEnabled } from "@/lib/features";
 
 const NAV = [
   { href: "/signals", label: "Signals" },
@@ -22,7 +23,12 @@ const ADMIN_NAV = [
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const role = useAuthStore((s) => s.user?.role);
+  const autoCopy = useAutoCopyEnabled();
   const nav = role === "ADMIN" ? [...NAV, ...ADMIN_NAV] : NAV;
+  const offTag = (href: string) =>
+    href === "/automation" && autoCopy === false
+      ? <span className="ml-1.5 rounded bg-surface-3 px-1.5 py-0.5 text-[10px] font-medium text-muted-2">Off</span>
+      : null;
 
   return (
     <div className="flex min-h-screen">
@@ -44,6 +50,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 )}
               >
                 {n.label}
+                {offTag(n.href)}
               </Link>
             );
           })}
@@ -69,6 +76,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             return (
               <Link key={n.href} href={n.href} className={cn("whitespace-nowrap rounded-lg px-3 py-1.5 text-sm", active ? "bg-primary/15 text-primary" : "text-muted")}>
                 {n.label}
+                {offTag(n.href)}
               </Link>
             );
           })}
