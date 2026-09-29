@@ -45,7 +45,8 @@ export default function SignalsPage() {
   );
 
   const q = query.trim().toLowerCase();
-  const matches = (s: Signal) => !q || `${s.symbol} ${s.market} ${s.side}`.toLowerCase().includes(q);
+  const matches = (s: Signal) =>
+    !q || `${s.symbol} ${s.market} ${s.side} ${sourceLabel(s)}`.toLowerCase().includes(q);
   // One list, open signals on top — each half already sorted newest-first.
   const rows = [...active, ...closed].filter(matches);
 
@@ -80,7 +81,7 @@ export default function SignalsPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by market, side…"
+            placeholder="Search by market, side, platform…"
             className="h-9 w-full max-w-xs rounded-lg border border-border bg-surface-2 px-3 text-sm text-foreground placeholder:text-muted-2 focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
@@ -125,13 +126,24 @@ function SideBadge({ side }: { side: string }) {
   return <Badge tone={side === "LONG" ? "long" : "short"}>{side}</Badge>;
 }
 
+const sourceLabel = (s: Signal) => (s.source === "deepchart" ? "Deepchart" : "Vault");
+
+/** Where the trader placed the trade — the Vault web platform or Deepchart. */
+function SourceTag({ s }: { s: Signal }) {
+  return (
+    <Badge tone={s.source === "deepchart" ? "info" : "neutral"} className="ml-2 px-1.5 text-[10px]">
+      {sourceLabel(s)}
+    </Badge>
+  );
+}
+
 /** Over the daily limit: tease the row, hide every tradeable level behind a lock. */
 const LOCK = <span className="select-none blur-[3px]">•••••</span>;
 
 function LockedRow({ s }: { s: Signal }) {
   return (
     <tr className="border-b border-border/60 text-muted hover:bg-surface-2">
-      <Td className="font-medium text-muted">{s.symbol}</Td>
+      <Td className="font-medium text-muted">{s.symbol}<SourceTag s={s} /></Td>
       <Td><SideBadge side={s.side} /></Td>
       <Td className="text-center"><ConvictionBadge level={s.conviction} /></Td>
       {/* Qty, Entry, Target, Stop, Exit, Result — every tradeable number stays hidden. */}
@@ -179,7 +191,7 @@ function Row({ s }: { s: Signal }) {
         isOpen ? (s.side === "LONG" ? "bg-long/5" : "bg-short/5") : "text-muted",
       )}
     >
-      <Td className={cn("font-medium", !isOpen && "text-foreground")}>{s.symbol}</Td>
+      <Td className={cn("font-medium whitespace-nowrap", !isOpen && "text-foreground")}>{s.symbol}<SourceTag s={s} /></Td>
       <Td><SideBadge side={s.side} /></Td>
       <Td className="text-center"><ConvictionBadge level={s.conviction} /></Td>
       <Td className="nums text-right">{s.quantity}</Td>

@@ -29,6 +29,7 @@ export interface Signal {
   unrealizedPnl: number | null;
   win: boolean | null;
   locked?: boolean; // over the user's daily limit — price levels hidden
+  source?: "vault" | "deepchart"; // where the trader placed the trade
 }
 
 export const MARKETS = ["ES", "NQ", "YM", "GC", "CL"] as const;
